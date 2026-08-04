@@ -201,15 +201,34 @@ jobs:
         env:
           DOCKER_BUILDKIT_INLINE_CACHE: 1
 
+      - name: Build and push WORKER platform image by digest
+        id: build-worker
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runner-worker
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          tags: |
+            ${{ env.IMAGE_NAME }}
+            ${{ env.GHCR_IMAGE_NAME }}
+          cache-from: type=gha,scope=docker-worker-${{ matrix.arch }}
+          cache-to: type=gha,scope=docker-worker-${{ matrix.arch }},mode=max
+          no-cache: false
+        env:
+          DOCKER_BUILDKIT_INLINE_CACHE: 1
+
       - name: Export digests
         env:
           DIGEST_BASE: ${{ steps.build.outputs.digest }}
           DIGEST_WEB: ${{ steps.build-web.outputs.digest }}
+          DIGEST_WORKER: ${{ steps.build-worker.outputs.digest }}
         run: |
           set -euo pipefail
-          mkdir -p /tmp/digests/base /tmp/digests/web
+          mkdir -p /tmp/digests/base /tmp/digests/web /tmp/digests/worker
           touch "/tmp/digests/base/${DIGEST_BASE#sha256:}"
           touch "/tmp/digests/web/${DIGEST_WEB#sha256:}"
+          touch "/tmp/digests/worker/${DIGEST_WORKER#sha256:}"
 
       - name: Upload base digests
         uses: actions/upload-artifact@v7
@@ -224,6 +243,14 @@ jobs:
         with:
           name: digests-web-${{ matrix.arch }}
           path: /tmp/digests/web/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload worker digests
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-worker-${{ matrix.arch }}
+          path: /tmp/digests/worker/*
           if-no-files-found: error
           retention-days: 1
 
@@ -281,6 +308,13 @@ jobs:
           path: /tmp/digests/web
           merge-multiple: true
 
+      - name: Download worker digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: digests-worker-*
+          path: /tmp/digests/worker
+          merge-multiple: true
+
       - name: Create Docker Hub manifest
         run: |
           set -euo pipefail
@@ -304,6 +338,7 @@ jobs:
 
           create_manifest "${IMAGE_NAME}" "" /tmp/digests/base
           create_manifest "${IMAGE_NAME}" "-web" /tmp/digests/web
+          create_manifest "${IMAGE_NAME}" "-worker" /tmp/digests/worker
 
       - name: Create GHCR manifest
         run: |
@@ -328,6 +363,7 @@ jobs:
 
           create_manifest "${GHCR_IMAGE_NAME}" "" /tmp/digests/base
           create_manifest "${GHCR_IMAGE_NAME}" "-web" /tmp/digests/web
+          create_manifest "${GHCR_IMAGE_NAME}" "-worker" /tmp/digests/worker
 
       - name: Inspect image
         if: needs.prepare.outputs.version != 'main'

@@ -1,0 +1,260 @@
+# CronJobs de OmniRoute — las 5 tareas periódicas que no consumen las colas
+# BullMQ. El worker (Deployment omniroute-worker, kubernetes.yaml) consume las
+# 9 colas frecuentes; estas tareas se ejecutan aquí como trabajos únicos
+# (one-shot) programados por K8s.
+#
+# IMPORTANTE: los entrypoints bin/workers/<name>.mjs se añaden en la Task 6
+# (todavía no existen). Aplicar este manifiesto DESPUÉS de la Task 6 y de que
+# exista la imagen diegosouzapw/omniroute:latest-worker en Docker Hub.
+#
+# Convenciones comunes a todos los CronJobs:
+#   - concurrencyPolicy: Forbid (nunca dos ejecuciones simultáneas)
+#   - restartPolicy: OnFailure + backoffLimit: 1 (sin reintentos infinitos)
+#   - El comando override sustituye el CMD de la imagen (el ENTRYPOINT de
+#     check-permissions.sh sigue ejecutándose primero)
+#   - Montan el mismo omniroute-pvc (ReadWriteOnce) que el pod web → en un
+#     cluster multi-nodo deben programarse en el nodo del pod web
+#   - env + envFrom (secretRef omniroute-secrets) requeridos: la base SQLite
+#     en DATA_DIR=/app/data está cifrada en reposo (STORAGE_ENCRYPTION_KEY)
+#   - Los horarios por defecto derivan de JOB_TICK_MS en
+#     src/lib/background/types.ts; ajustables por el operador
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pricing-sync
+  namespace: omniroute
+spec:
+  schedule: "0 4 * * *" # tick por defecto 24h
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pricing-sync
+              image: diegosouzapw/omniroute:latest-worker
+              imagePullPolicy: Always
+              command: ["node", "--import", "tsx/esm", "bin/workers/pricing-sync.mjs"]
+              env:
+                - name: REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_DRIVER
+                  value: "redis"
+                - name: OMNIROUTE_MEMORY_MB
+                  value: "1024"
+              envFrom:
+                - secretRef:
+                    name: omniroute-secrets
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: omniroute-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+  namespace: omniroute
+spec:
+  schedule: "0 * * * *" # comprobación horaria; runBackupScheduleTick auto-limita según backup-schedule.json
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: diegosouzapw/omniroute:latest-worker
+              imagePullPolicy: Always
+              command: ["node", "--import", "tsx/esm", "bin/workers/backup.mjs"]
+              env:
+                - name: REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_DRIVER
+                  value: "redis"
+                - name: OMNIROUTE_MEMORY_MB
+                  value: "1024"
+              envFrom:
+                - secretRef:
+                    name: omniroute-secrets
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: omniroute-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-vacuum
+  namespace: omniroute
+spec:
+  schedule: "0 3 * * *" # tick por defecto 24h
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: db-vacuum
+              image: diegosouzapw/omniroute:latest-worker
+              imagePullPolicy: Always
+              command: ["node", "--import", "tsx/esm", "bin/workers/db-vacuum.mjs"]
+              env:
+                - name: REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_DRIVER
+                  value: "redis"
+                - name: OMNIROUTE_MEMORY_MB
+                  value: "1024"
+              envFrom:
+                - secretRef:
+                    name: omniroute-secrets
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: omniroute-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: budget-reset
+  namespace: omniroute
+spec:
+  schedule: "*/10 * * * *" # coincide con la cadencia 10min previa a Task 4
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: budget-reset
+              image: diegosouzapw/omniroute:latest-worker
+              imagePullPolicy: Always
+              command: ["node", "--import", "tsx/esm", "bin/workers/budget-reset.mjs"]
+              env:
+                - name: REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_DRIVER
+                  value: "redis"
+                - name: OMNIROUTE_MEMORY_MB
+                  value: "1024"
+              envFrom:
+                - secretRef:
+                    name: omniroute-secrets
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: omniroute-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: call-log-rotation
+  namespace: omniroute
+spec:
+  schedule: "0 2 * * *" # tick por defecto 24h
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: call-log-rotation
+              image: diegosouzapw/omniroute:latest-worker
+              imagePullPolicy: Always
+              command: ["node", "--import", "tsx/esm", "bin/workers/call-log-rotation.mjs"]
+              env:
+                - name: REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_DRIVER
+                  value: "redis"
+                - name: OMNIROUTE_MEMORY_MB
+                  value: "1024"
+              envFrom:
+                - secretRef:
+                    name: omniroute-secrets
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: omniroute-pvc
