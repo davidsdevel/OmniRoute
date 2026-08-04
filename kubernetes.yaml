@@ -1,0 +1,310 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: omniroute
+
+---
+# ==========================================
+# REDIS: Almacenamiento persistente, Pod y Servicio
+# ==========================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: omniroute
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: omniroute
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.6.2-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["redis-server", "--save", "60", "1", "--loglevel", "verbose"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: omniroute
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: omniroute-secrets
+  namespace: omniroute
+stringData:
+  JWT_SECRET: "secret"
+  INITIAL_PASSWORD: "secret"
+  API_KEY_SECRET: "secret"
+  STORAGE_ENCRYPTION_KEY: "secret"
+  STORAGE_ENCRYPTION_KEY_VERSION: "v1"
+  MACHINE_ID_SALT: "secret"
+  OMNIROUTE_WS_BRIDGE_SECRET: "secret"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: omniroute-pvc
+  namespace: omniroute
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omniroute
+  namespace: omniroute
+  labels:
+    app: omniroute
+spec:
+  replicas: 1 # OmniRoute almacena estado local en SQLite, por lo que se recomienda 1 réplica activa.
+  selector:
+    matchLabels:
+      app: omniroute
+  template:
+    metadata:
+      labels:
+        app: omniroute
+    spec:
+      containers:
+        - name: omniroute
+          image: davidsdevel/omniroute:latest-web
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 20128
+              name: http
+          env:
+            - name: NEXT_PUBLIC_BASE_URL
+              value: "http://host.com"
+            - name: PORT
+              value: "20128"
+            - name: BASE_URL
+              value: "http://localhost:20128"
+            - name: REDIS_URL
+              value: "redis://redis-service:6379"
+            - name: QUOTA_STORE_REDIS_URL
+              value: "redis://redis-service:6379"
+            - name: QUOTA_STORE_DRIVER
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: OMNIROUTE_MEMORY_MB
+              value: "3072"
+            - name: CREDENTIAL_HEALTH_CHECK_INTERVAL
+              value: "1800000"
+            - name: PROXY_HEALTH_INTERVAL_MS
+              value: "3600000"
+            - name: ARENA_ELO_SYNC_ENABLED
+              value: "false"
+          envFrom:
+            - secretRef:
+                name: omniroute-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "1Gi" # Memoria inicial recomendada
+              cpu: "500m"
+            limits:
+              memory: "4Gi" # Auméntalo a 2Gi o superior según tu carga de peticiones
+              cpu: "2000m"
+          # Nota: Como el contenedor usa Next.js de forma nativa,
+          # se apunta al puerto HTTP principal para las comprobaciones de actividad.
+          readinessProbe:
+            httpGet:
+              path: /api/health/ping
+              port: 20128
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health/ping
+              port: 20128
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /api/health/ping
+              port: 20128
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: omniroute-pvc
+---
+# ==========================================
+# WORKER: Tareas de fondo (BullMQ) y CronJobs
+# ==========================================
+#
+# IMPORTANTE (ReadWriteOnce): omniroute-worker y los CronJobs de
+# k8s/cronjobs.yaml montan el mismo omniroute-pvc que el pod web. En un
+# cluster multi-nodo deben programarse en el nodo del pod web. Este cluster
+# es de un solo nodo (Traefik + host.com), por lo que no se
+# añade ningún nodeSelector.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omniroute-worker
+  namespace: omniroute
+  labels:
+    app: omniroute-worker
+spec:
+  replicas: 1 # El worker consume las 9 colas frecuentes; los jobs periódicos los lanzan los CronJobs.
+  selector:
+    matchLabels:
+      app: omniroute-worker
+  template:
+    metadata:
+      labels:
+        app: omniroute-worker
+    spec:
+      terminationGracePeriodSeconds: 30 # El worker maneja SIGTERM (bin/worker.mjs)
+      containers:
+        - name: worker
+          image: davidsdevel/omniroute:latest-worker
+          imagePullPolicy: Always
+          # Sin probes HTTP: el worker no es un servidor HTTP (la healthcheck
+          # del runner-base comprueba el servidor web, que aquí no existe).
+          # Se confía en restartPolicy: Always + salida no-cero ante errores fatales.
+          env:
+            - name: REDIS_URL
+              value: "redis://redis-service:6379"
+            - name: QUOTA_STORE_REDIS_URL
+              value: "redis://redis-service:6379"
+            - name: QUOTA_STORE_DRIVER
+              value: "redis"
+            - name: OMNIROUTE_MEMORY_MB
+              value: "1024"
+          # Requerido: el worker abre la base SQLite en DATA_DIR=/app/data
+          # (cifrada en reposo); sin STORAGE_ENCRYPTION_KEY del secreto no
+          # puede leer la DB compartida con el pod web.
+          envFrom:
+            - secretRef:
+                name: omniroute-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: omniroute-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omniroute-service
+  namespace: omniroute
+spec:
+  type: ClusterIP
+  ports:
+    - port: 20128
+      targetPort: 20128
+      protocol: TCP
+      name: http
+  selector:
+    app: omniroute
+---
+# --- INGRESS CON TLS AUTOMÁTICO ---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omniroute-ingress
+  namespace: omniroute
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "myresolver"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - host.com
+      secretName: omniroute-tls-certs
+  rules:
+    # 1. Regla principal para el Dashboard (Puerto 20130 del Service -> 20128 del contenedor)
+    - host: host.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: omniroute-service
+                port:
+                  number: 20128

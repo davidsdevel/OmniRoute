@@ -1,0 +1,74 @@
+# Workflow personal (fork-only) de DavidS — publica imágenes a Docker Hub
+# en davidsdevel/omniroute con los tags -web / -worker usados por los
+# manifiestos k8s de omniroute.davidsdevel.com. NO enviar como parte de
+# PRs a upstream (diegosouzapw) — el pipeline upstream vive en
+# docker-publish.yml.
+#
+# Ejecutar manualmente (Actions → "Publish davidsdevel images"):
+#   1. Pulsa "Run workflow", elige la rama de origen (release/v3.8.50).
+#   2. version: tag adicional además de :latest (p.ej. 3.8.50).
+# Requiere secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN de la cuenta
+# davidsdevel en el repo donde se ejecute.
+name: Publish davidsdevel images
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to push alongside :latest (e.g. 3.8.50)"
+        required: false
+        type: string
+        default: "3.8.50"
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: davidsdevel/omniroute
+
+jobs:
+  build:
+    name: Build and push web + worker (linux/amd64)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push WEB image
+        id: build-web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runner-web
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest-web
+            ${{ env.IMAGE_NAME }}:${{ inputs.version }}-web
+          cache-from: type=gha,scope=docker-web
+          cache-to: type=gha,scope=docker-web,mode=max
+
+      - name: Build and push WORKER image
+        id: build-worker
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runner-worker
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest-worker
+            ${{ env.IMAGE_NAME }}:${{ inputs.version }}-worker
+          cache-from: type=gha,scope=docker-worker
+          cache-to: type=gha,scope=docker-worker,mode=max

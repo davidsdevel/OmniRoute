@@ -5,7 +5,7 @@
 #
 # IMPORTANTE: los entrypoints bin/workers/<name>.mjs existen en esta rama;
 # aplicar este manifiesto después de que exista la imagen
-# diegosouzapw/omniroute:latest-worker en Docker Hub.
+# davidsdevel/omniroute:latest-worker en Docker Hub.
 #
 # Convenciones comunes a todos los CronJobs:
 #   - concurrencyPolicy: Forbid (nunca dos ejecuciones simultáneas)
@@ -40,7 +40,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: pricing-sync
-              image: diegosouzapw/omniroute:latest-worker
+              image: davidsdevel/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/pricing-sync.mjs"]
               env:
@@ -88,7 +88,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: backup
-              image: diegosouzapw/omniroute:latest-worker
+              image: davidsdevel/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/backup.mjs"]
               env:
@@ -136,7 +136,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: db-vacuum
-              image: diegosouzapw/omniroute:latest-worker
+              image: davidsdevel/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/db-vacuum.mjs"]
               env:
@@ -184,7 +184,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: budget-reset
-              image: diegosouzapw/omniroute:latest-worker
+              image: davidsdevel/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/budget-reset.mjs"]
               env:
@@ -232,7 +232,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: call-log-rotation
-              image: diegosouzapw/omniroute:latest-worker
+              image: davidsdevel/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/call-log-rotation.mjs"]
               env:
@@ -280,7 +280,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: cleanup
-              image: diegosouzapw/omniroute:latest-worker
+              image: davidsdevel/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/cleanup.mjs"]
               env:
