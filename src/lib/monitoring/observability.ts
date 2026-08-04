@@ -88,6 +88,12 @@ interface BuildHealthPayloadOptions {
     unknown: number;
     stale: number;
   };
+  /**
+   * Background queue depth from `src/lib/background/observed.ts`. Kept as a
+   * loose structural type so this payload builder stays decoupled from the
+   * BullMQ module graph.
+   */
+  background?: { enabled: boolean; queues: JsonRecord };
 }
 
 function limitMonitors(monitors: QuotaMonitorSnapshot[], maxItems = 8): QuotaMonitorSnapshot[] {
@@ -227,6 +233,7 @@ export function buildHealthPayload({
   activeSessions,
   activeSessionsByKey = {},
   credentialHealth,
+  background,
 }: BuildHealthPayloadOptions) {
   const timestamp = new Date().toISOString();
   const system = {
@@ -321,6 +328,7 @@ export function buildHealthPayload({
     },
     sessions: buildSessionsSummary({ activeSessions, activeSessionsByKey }),
     credentialHealth, // may be undefined if credentialHealth module not loaded
+    background,
     dedup: {
       inflightRequests,
     },

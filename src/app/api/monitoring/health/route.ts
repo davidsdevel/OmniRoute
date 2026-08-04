@@ -56,6 +56,7 @@ export async function GET() {
       sessionManagerModule,
       credentialHealthModule,
       localHealthModule,
+      backgroundModule,
       settingsResult,
       connectionsResult,
     ] = await Promise.allSettled([
@@ -67,6 +68,7 @@ export async function GET() {
       import("@omniroute/open-sse/services/sessionManager.ts"),
       import("@/lib/credentialHealth/cache"),
       import("@/lib/localHealthCheck"),
+      import("@/lib/background/observed"),
       getCachedSettings(),
       getProviderConnections(),
     ]);
@@ -145,12 +147,19 @@ export async function GET() {
         : {};
     const settings = settingsResult.status === "fulfilled" ? settingsResult.value : {};
     const connections = connectionsResult.status === "fulfilled" ? connectionsResult.value : [];
+    // getBackgroundQueueDepth() never rejects; a failed module load keeps health
+    // green with an empty/disabled background payload.
+    const background =
+      backgroundModule.status === "fulfilled"
+        ? await backgroundModule.value.getBackgroundQueueDepth()
+        : { enabled: false, queues: {} };
 
     const payload = buildHealthPayload({
       appVersion: APP_CONFIG.version,
       catalogCount: Object.keys(AI_PROVIDERS).length,
       settings,
       connections,
+      background,
       circuitBreakers,
       rateLimitStatus,
       learnedLimits,
@@ -187,6 +196,7 @@ export async function GET() {
       quotaMonitor: { ...fallbackQuotaMonitorSummary, monitors: [] },
       sessions: { activeCount: 0, stickyBoundCount: 0, byApiKey: {}, top: [] },
       dedup: { inflightRequests: 0 },
+      background: { enabled: false, queues: {} },
     });
   }
 }

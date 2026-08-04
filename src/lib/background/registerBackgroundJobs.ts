@@ -35,6 +35,15 @@ const SCHEDULE_TIMEOUT_MS = 15_000;
 
 let activeRegistration: BackgroundRegistration | null = null;
 
+/**
+ * The active background queues handle, or null before `registerBackgroundJobs()`
+ * has run. Read by the health endpoint (via `src/lib/background/observed.ts`) so
+ * it can report live queue depth without owning a second Redis connection.
+ */
+export function getActiveBackgroundQueues(): Queues | null {
+  return activeRegistration?.queues ?? null;
+}
+
 export interface RegisterBackgroundJobsOptions {
   /** Test seam — production callers omit this and let initQueues() read REDIS_URL. */
   queues?: Queues;
