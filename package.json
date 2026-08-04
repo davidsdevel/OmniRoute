@@ -257,6 +257,7 @@
     "axios": "^1.16.1",
     "bcryptjs": "^3.0.3",
     "bottleneck": "^2.19.5",
+    "bullmq": "^6.0.6",
     "clsx": "^2.1.1",
     "commander": "^15.0.0",
     "csv-stringify": "^6.7.0",
@@ -433,5 +434,23 @@
         "js-yaml": "^4.2.0"
       }
     }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "allowScripts": {
+    "@parcel/watcher@2.5.6": true,
+    "@playwright/browser-chromium@1.61.1": true,
+    "@swc/core@1.15.43": true,
+    "better-sqlite3@13.0.1": true,
+    "bun@1.3.14": true,
+    "core-js@3.29.1": true,
+    "esbuild@0.28.1": true,
+    "keytar@7.9.0": true,
+    "koffi@2.16.1": true,
+    "libxmljs2@0.37.0": true,
+    "onnxruntime-node@1.21.0": true,
+    "onnxruntime-node@1.24.3": true,
+    "protobufjs@7.6.4": true,
+    "tls-client-node@0.2.0": true,
+    "unrs-resolver@1.11.1": true
   }
 }
