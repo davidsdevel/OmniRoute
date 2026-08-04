@@ -6,10 +6,10 @@ export interface BackgroundQueueDepth {
   queues: Record<string, JobCounts>;
 }
 
-export const EMPTY_BACKGROUND_QUEUE_DEPTH: BackgroundQueueDepth = {
+export const EMPTY_BACKGROUND_QUEUE_DEPTH: BackgroundQueueDepth = Object.freeze({
   enabled: false,
   queues: {},
-};
+});
 
 /**
  * Non-blocking snapshot of the active background queues for the health

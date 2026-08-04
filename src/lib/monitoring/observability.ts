@@ -233,7 +233,7 @@ export function buildHealthPayload({
   activeSessions,
   activeSessionsByKey = {},
   credentialHealth,
-  background,
+  background = { enabled: false, queues: {} },
 }: BuildHealthPayloadOptions) {
   const timestamp = new Date().toISOString();
   const system = {
