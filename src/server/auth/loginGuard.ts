@@ -38,6 +38,7 @@ function pruneExpiredAttempts(now: number): void {
   for (const [key, state] of attempts) {
     const windowElapsed = now - state.firstAttemptAt > WINDOW_MS;
     const notLocked = !state.lockedUntil || state.lockedUntil <= now;
+
     if (windowElapsed && notLocked) attempts.delete(key);
   }
 }
