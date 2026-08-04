@@ -27,9 +27,10 @@ const ONE_SHOTS: { path: string; domainFunction: string }[] = [
   { path: "bin/workers/db-vacuum.mjs", domainFunction: "runNow" },
   { path: "bin/workers/budget-reset.mjs", domainFunction: "syncAllBudgetSchedules" },
   { path: "bin/workers/call-log-rotation.mjs", domainFunction: "rotateCallLogs" },
+  { path: "bin/workers/cleanup.mjs", domainFunction: "runAutoCleanup" },
 ];
 
-test("all 5 one-shot CronJob entrypoints exist", () => {
+test("all 6 one-shot CronJob entrypoints exist", () => {
   for (const { path } of ONE_SHOTS) {
     assert.ok(existsSync(join(ROOT, path)), `${path} should exist`);
   }
@@ -57,6 +58,19 @@ test("db-vacuum one-shot gates on scheduledVacuum", () => {
   const src = readProjectFile("bin/workers/db-vacuum.mjs");
   assert.ok(src, "bin/workers/db-vacuum.mjs should exist");
   assert.match(src, /scheduledVacuum/);
+});
+
+test("cleanup one-shot runs best-effort VACUUM only after rows were deleted", () => {
+  const src = readProjectFile("bin/workers/cleanup.mjs");
+  assert.ok(src, "bin/workers/cleanup.mjs should exist");
+  assert.match(src, /runAutoCleanup/, "cleanup one-shot should import runAutoCleanup");
+  assert.match(src, /totalDeleted\s*>\s*0/, "VACUUM should be gated on rows being deleted");
+  assert.match(src, /getDbInstance\(\).*exec\("VACUUM"\)/s, "deleted rows should trigger VACUUM");
+  assert.match(
+    src,
+    /non-fatal/,
+    "a busy-DB VACUUM failure must be non-fatal (dedicated db-vacuum CronJob owns authoritative vacuuming)"
+  );
 });
 
 test("accountFallback registry job is wired to evictModelLockoutOverflow", () => {

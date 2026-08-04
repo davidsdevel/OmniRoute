@@ -5,9 +5,9 @@ import type { BackgroundJobName } from "./types";
 /**
  * BullMQ queue layer for the 9 frequent background jobs.
  *
- * The 5 scheduled jobs (pricingSync, backup, dbVacuum, budgetReset,
- * callLogRotation) intentionally stay K8s CronJobs — they get NO BullMQ
- * queue or repeatable job here (Task 5 of the workers plan).
+ * The 6 scheduled jobs (pricingSync, backup, dbVacuum, budgetReset,
+ * callLogRotation, cleanup) intentionally stay K8s CronJobs — they get NO
+ * BullMQ queue or repeatable job here (Tasks 5-6 of the workers plan).
  */
 
 export type BackgroundQueueName =

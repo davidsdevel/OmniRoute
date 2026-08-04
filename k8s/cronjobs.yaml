@@ -1,11 +1,11 @@
-# CronJobs de OmniRoute — las 5 tareas periódicas que no consumen las colas
+# CronJobs de OmniRoute — las 6 tareas periódicas que no consumen las colas
 # BullMQ. El worker (Deployment omniroute-worker, kubernetes.yaml) consume las
 # 9 colas frecuentes; estas tareas se ejecutan aquí como trabajos únicos
 # (one-shot) programados por K8s.
 #
-# IMPORTANTE: los entrypoints bin/workers/<name>.mjs se añaden en la Task 6
-# (todavía no existen). Aplicar este manifiesto DESPUÉS de la Task 6 y de que
-# exista la imagen diegosouzapw/omniroute:latest-worker en Docker Hub.
+# IMPORTANTE: los entrypoints bin/workers/<name>.mjs existen en esta rama;
+# aplicar este manifiesto después de que exista la imagen
+# diegosouzapw/omniroute:latest-worker en Docker Hub.
 #
 # Convenciones comunes a todos los CronJobs:
 #   - concurrencyPolicy: Forbid (nunca dos ejecuciones simultáneas)
@@ -235,6 +235,54 @@ spec:
               image: diegosouzapw/omniroute:latest-worker
               imagePullPolicy: Always
               args: ["node", "--import", "tsx/esm", "bin/workers/call-log-rotation.mjs"]
+              env:
+                - name: REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_REDIS_URL
+                  value: "redis://redis-service:6379"
+                - name: QUOTA_STORE_DRIVER
+                  value: "redis"
+                - name: OMNIROUTE_MEMORY_MB
+                  value: "1024"
+              envFrom:
+                - secretRef:
+                    name: omniroute-secrets
+              volumeMounts:
+                - name: data
+                  mountPath: /app/data
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "500m"
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: omniroute-pvc
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup
+  namespace: omniroute
+spec:
+  schedule: "0 */6 * * *" # cadencia 6h (antiguo startCleanupScheduler)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: diegosouzapw/omniroute:latest-worker
+              imagePullPolicy: Always
+              args: ["node", "--import", "tsx/esm", "bin/workers/cleanup.mjs"]
               env:
                 - name: REDIS_URL
                   value: "redis://redis-service:6379"
