@@ -5,8 +5,8 @@
 # docker-publish.yml.
 #
 # Ejecutar manualmente (Actions → "Publish davidsdevel images"):
-#   1. Pulsa "Run workflow", elige la rama de origen (release/v3.8.50).
-#   2. version: tag adicional además de :latest (p.ej. 3.8.50).
+#   1. Pulsa "Run workflow", elige la rama de origen (release/v3.8.51).
+#   2. version: tag adicional además de :latest (p.ej. 3.8.51).
 # Requiere secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN de la cuenta
 # davidsdevel en el repo donde se ejecute.
 name: Publish davidsdevel images
@@ -15,10 +15,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag to push alongside :latest (e.g. 3.8.50)"
+        description: "Version tag to push alongside :latest (e.g. 3.8.51)"
         required: false
         type: string
-        default: "3.8.50"
+        default: "3.8.51"
 
 permissions:
   contents: read
