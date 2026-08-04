@@ -10,8 +10,11 @@
 # Convenciones comunes a todos los CronJobs:
 #   - concurrencyPolicy: Forbid (nunca dos ejecuciones simultáneas)
 #   - restartPolicy: OnFailure + backoffLimit: 1 (sin reintentos infinitos)
-#   - El comando override sustituye el CMD de la imagen (el ENTRYPOINT de
-#     check-permissions.sh sigue ejecutándose primero)
+#   - Se usa `args` (no `command`): con `command` se sustituiría el ENTRYPOINT
+#     de la imagen (check-permissions.sh), que ajusta NODE_OPTIONS según
+#     OMNIROUTE_MEMORY_MB y avisa si DATA_DIR no es escribible. Con `args` el
+#     ENTRYPOINT corre primero y `exec "$@"` (scripts/check-permissions.sh)
+#     reenvía el one-shot correctamente.
 #   - Montan el mismo omniroute-pvc (ReadWriteOnce) que el pod web → en un
 #     cluster multi-nodo deben programarse en el nodo del pod web
 #   - env + envFrom (secretRef omniroute-secrets) requeridos: la base SQLite
@@ -39,7 +42,7 @@ spec:
             - name: pricing-sync
               image: diegosouzapw/omniroute:latest-worker
               imagePullPolicy: Always
-              command: ["node", "--import", "tsx/esm", "bin/workers/pricing-sync.mjs"]
+              args: ["node", "--import", "tsx/esm", "bin/workers/pricing-sync.mjs"]
               env:
                 - name: REDIS_URL
                   value: "redis://redis-service:6379"
@@ -57,10 +60,10 @@ spec:
                   mountPath: /app/data
               resources:
                 requests:
-                  memory: "128Mi"
+                  memory: "256Mi"
                   cpu: "100m"
                 limits:
-                  memory: "512Mi"
+                  memory: "1Gi"
                   cpu: "500m"
           volumes:
             - name: data
@@ -87,7 +90,7 @@ spec:
             - name: backup
               image: diegosouzapw/omniroute:latest-worker
               imagePullPolicy: Always
-              command: ["node", "--import", "tsx/esm", "bin/workers/backup.mjs"]
+              args: ["node", "--import", "tsx/esm", "bin/workers/backup.mjs"]
               env:
                 - name: REDIS_URL
                   value: "redis://redis-service:6379"
@@ -105,10 +108,10 @@ spec:
                   mountPath: /app/data
               resources:
                 requests:
-                  memory: "128Mi"
+                  memory: "256Mi"
                   cpu: "100m"
                 limits:
-                  memory: "512Mi"
+                  memory: "1Gi"
                   cpu: "500m"
           volumes:
             - name: data
@@ -135,7 +138,7 @@ spec:
             - name: db-vacuum
               image: diegosouzapw/omniroute:latest-worker
               imagePullPolicy: Always
-              command: ["node", "--import", "tsx/esm", "bin/workers/db-vacuum.mjs"]
+              args: ["node", "--import", "tsx/esm", "bin/workers/db-vacuum.mjs"]
               env:
                 - name: REDIS_URL
                   value: "redis://redis-service:6379"
@@ -153,10 +156,10 @@ spec:
                   mountPath: /app/data
               resources:
                 requests:
-                  memory: "128Mi"
+                  memory: "256Mi"
                   cpu: "100m"
                 limits:
-                  memory: "512Mi"
+                  memory: "1Gi"
                   cpu: "500m"
           volumes:
             - name: data
@@ -183,7 +186,7 @@ spec:
             - name: budget-reset
               image: diegosouzapw/omniroute:latest-worker
               imagePullPolicy: Always
-              command: ["node", "--import", "tsx/esm", "bin/workers/budget-reset.mjs"]
+              args: ["node", "--import", "tsx/esm", "bin/workers/budget-reset.mjs"]
               env:
                 - name: REDIS_URL
                   value: "redis://redis-service:6379"
@@ -201,10 +204,10 @@ spec:
                   mountPath: /app/data
               resources:
                 requests:
-                  memory: "128Mi"
+                  memory: "256Mi"
                   cpu: "100m"
                 limits:
-                  memory: "512Mi"
+                  memory: "1Gi"
                   cpu: "500m"
           volumes:
             - name: data
@@ -231,7 +234,7 @@ spec:
             - name: call-log-rotation
               image: diegosouzapw/omniroute:latest-worker
               imagePullPolicy: Always
-              command: ["node", "--import", "tsx/esm", "bin/workers/call-log-rotation.mjs"]
+              args: ["node", "--import", "tsx/esm", "bin/workers/call-log-rotation.mjs"]
               env:
                 - name: REDIS_URL
                   value: "redis://redis-service:6379"
@@ -249,10 +252,10 @@ spec:
                   mountPath: /app/data
               resources:
                 requests:
-                  memory: "128Mi"
+                  memory: "256Mi"
                   cpu: "100m"
                 limits:
-                  memory: "512Mi"
+                  memory: "1Gi"
                   cpu: "500m"
           volumes:
             - name: data
