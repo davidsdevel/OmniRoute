@@ -112,6 +112,7 @@ async function startServer() {
 
     await initializeCloudSync();
     await registerBackgroundJobs();
+
     startRuntimeConfigHotReload();
     startupLog.info("Server started with cloud sync initialized");
 

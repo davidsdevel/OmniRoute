@@ -4,14 +4,20 @@
 # PRs a upstream (diegosouzapw) — el pipeline upstream vive en
 # docker-publish.yml.
 #
-# Ejecutar manualmente (Actions → "Publish davidsdevel images"):
-#   1. Pulsa "Run workflow", elige la rama de origen (release/v3.8.51).
+# Se ejecuta automáticamente al hacer push a `main` (solo tags :latest) o
+# manualmente (Actions → "Publish davidsdevel images"):
+#   1. Pulsa "Run workflow", elige la rama de origen.
 #   2. version: tag adicional además de :latest (p.ej. 3.8.51).
 # Requiere secrets DOCKERHUB_USERNAME + DOCKERHUB_TOKEN de la cuenta
 # davidsdevel en el repo donde se ejecute.
 name: Publish davidsdevel images
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       version:
@@ -45,6 +51,21 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Resolve image tags
+        id: tags
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          WEB="${IMAGE_NAME}:latest-web"
+          WORKER="${IMAGE_NAME}:latest-worker"
+          if [ -n "${VERSION}" ]; then
+            WEB="${WEB}"$'\n'"${IMAGE_NAME}:${VERSION}-web"
+            WORKER="${WORKER}"$'\n'"${IMAGE_NAME}:${VERSION}-worker"
+          fi
+          echo "web=${WEB}" >> "${GITHUB_OUTPUT}"
+          echo "worker=${WORKER}" >> "${GITHUB_OUTPUT}"
+
       - name: Build and push WEB image
         id: build-web
         uses: docker/build-push-action@v7
@@ -54,8 +75,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:latest-web
-            ${{ env.IMAGE_NAME }}:${{ inputs.version }}-web
+            ${{ steps.tags.outputs.web }}
           cache-from: type=gha,scope=docker-web
           cache-to: type=gha,scope=docker-web,mode=max
 
@@ -68,7 +88,6 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:latest-worker
-            ${{ env.IMAGE_NAME }}:${{ inputs.version }}-worker
+            ${{ steps.tags.outputs.worker }}
           cache-from: type=gha,scope=docker-worker
           cache-to: type=gha,scope=docker-worker,mode=max
