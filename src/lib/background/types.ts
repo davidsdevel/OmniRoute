@@ -26,9 +26,9 @@ export const JOB_TICK_MS: Record<BackgroundJobName, number> = {
   spendBatch: 60_000,
   reasoningCacheCleanup: 3_600_000,
   pricingSync: 86_400_000,
-  backup: 86_400_000,
+  backup: 30_000,
   dbVacuum: 86_400_000,
-  budgetReset: 86_400_000,
+  budgetReset: 600_000,
   callLogRotation: 86_400_000,
   cleanup: 3_600_000,
 };
