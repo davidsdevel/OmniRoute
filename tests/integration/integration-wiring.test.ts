@@ -76,7 +76,6 @@ describe("Pipeline Wiring — server-init.ts", () => {
     // hybrid background system: registerBackgroundJobs() selects BullMQ queue mode
     // when REDIS_URL is set and falls back to in-process timers otherwise, so a
     // single-node/desktop boot never crashes on a missing Redis.
-    assert.match(src, /registerBackgroundJobs/);
     assert.match(src, /import\s*\{[^}]*\bregisterBackgroundJobs\b/);
   });
 
