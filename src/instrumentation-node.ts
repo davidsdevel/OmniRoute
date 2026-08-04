@@ -301,7 +301,6 @@ export async function registerNodejs(): Promise<void> {
     { initApiBridgeServer },
     { startBackgroundRefresh },
     { ensureCloudSyncInitialized },
-    { startProviderLimitsSyncScheduler },
     { getSettings },
     { applyRuntimeSettings },
     { startRuntimeConfigHotReload },
@@ -315,7 +314,6 @@ export async function registerNodejs(): Promise<void> {
     import("@/lib/apiBridgeServer"),
     import("@/domain/quotaCache"),
     import("@/lib/initCloudSync"),
-    import("@/shared/services/providerLimitsSyncScheduler"),
     import("@/lib/db/settings"),
     import("@/lib/config/runtimeSettings"),
     import("@/lib/config/hotReload"),
@@ -343,8 +341,9 @@ export async function registerNodejs(): Promise<void> {
   if (!isBackgroundServicesDisabled()) {
     startBackgroundRefresh();
     console.log("[STARTUP] Quota cache background refresh started");
-    startProviderLimitsSyncScheduler();
-    console.log("[STARTUP] Provider limits sync scheduler started");
+    const { registerBackgroundJobs } = await import("@/lib/background/registerBackgroundJobs");
+    const { mode: backgroundMode } = await registerBackgroundJobs();
+    console.log(`[STARTUP] Background jobs: ${backgroundMode} mode`);
     const { startQuotaAutoPing } = await import("@/lib/services/quotaAutoPing");
     startQuotaAutoPing();
     console.log("[STARTUP] Quota auto-ping scheduler started (opt-in, no-op until enabled)");
@@ -478,17 +477,6 @@ export async function registerNodejs(): Promise<void> {
     console.warn("[COMPLIANCE] Could not initialize audit log:", msg);
   }
 
-  // Storage-configured scheduled VACUUM (#4437): registers the timer from
-  // Settings > System & Storage and persists lastVacuumAt for the UI.
-  try {
-    const { initVacuumScheduler } = await import("@/lib/db/vacuumScheduler");
-    initVacuumScheduler();
-    console.log("[STARTUP] Scheduled VACUUM initialized (#4437)");
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn("[STARTUP] Could not initialize vacuum scheduler (non-fatal):", msg);
-  }
-
   // Warm the model catalog's durable, apiKey-independent sub-caches at
   // startup — see warmModelCatalogCache() for why the top-level Response
   // cache alone doesn't deliver this. Fire-and-forget, non-fatal.
@@ -514,13 +502,6 @@ export async function registerNodejs(): Promise<void> {
           console.warn("[STARTUP] Embed WS proxy failed to start (non-fatal):", msg);
         }),
 
-      import("@omniroute/open-sse/services/autoRefreshDaemon")
-        .then((m) => m.autoRefreshDaemon.start())
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn("[STARTUP] Auto-refresh daemon failed to start (non-fatal):", msg);
-        }),
-
       // Proactive connection-cooldown recovery (#8): re-validate connections whose
       // transient `rate_limited_until` window has elapsed OUTSIDE the request hot path,
       // so the first request after a cooldown does not pay the probe latency.
@@ -541,15 +522,6 @@ export async function registerNodejs(): Promise<void> {
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
           console.warn("[STARTUP] Arena ELO sync failed to start (non-fatal):", msg);
-        }),
-
-      // Pricing sync: opt-in external pricing data (self-gated by PRICING_SYNC_ENABLED inside
-      // initPricingSync). Non-blocking, never fatal.
-      import("@/lib/pricingSync")
-        .then((m) => m.initPricingSync())
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn("[STARTUP] Pricing sync failed to start (non-fatal):", msg);
         }),
 
       // models.dev capability sync: opt-in via Settings > AI (self-gated by
@@ -578,17 +550,6 @@ export async function registerNodejs(): Promise<void> {
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
           console.warn("[STARTUP] memory decay sweep failed to start (non-fatal):", msg);
-        }),
-
-      // Backup schedule (#8513): execute `backup-schedule.json` cron server-side.
-      // Reads the schedule written by `omniroute backup auto enable` and fires
-      // `runBackupCommand` when the cron expression matches. Self-gated: no-op
-      // when no schedule file exists or the schedule is disabled. Never fatal.
-      import("@/lib/jobs/backupScheduleJob")
-        .then((m) => m.startBackupScheduleJob())
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn("[STARTUP] backup schedule job failed to start (non-fatal):", msg);
         }),
 
       // Real-time dashboard WebSocket daemon (port 20132): powers Combo Studio Live,

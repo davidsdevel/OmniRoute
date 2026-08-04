@@ -1,11 +1,9 @@
 import initializeCloudSync from "@/shared/services/initializeCloudSync";
-import { startBudgetResetJob } from "@/lib/jobs/budgetResetJob";
 import { startModelSyncScheduler } from "@/shared/services/modelSyncScheduler";
 import { isAutomatedTestProcess } from "@/shared/utils/testProcess";
 
 // Initialize runtime background sync services once per server process.
 let initialized = false;
-
 
 export function shouldSkipCloudSyncInitialization(
   env: NodeJS.ProcessEnv = process.env,
@@ -29,11 +27,8 @@ export async function ensureCloudSyncInitialized() {
   }
   if (!initialized) {
     try {
-      const { initTokenHealthCheck } = await import("@/lib/tokenHealthCheck");
-      initTokenHealthCheck();
       await initializeCloudSync();
       startModelSyncScheduler();
-      startBudgetResetJob();
       initialized = true;
     } catch (error) {
       console.error("[ServerInit] Error initializing background sync services:", error);

@@ -4,14 +4,12 @@ import { enforceWebRuntimeEnv } from "./lib/env/runtimeEnv";
 import { enforceSecrets } from "./shared/utils/secretsValidator";
 import { initAuditLog, cleanupExpiredLogs, logAuditEvent } from "./lib/compliance/index";
 import { initConsoleInterceptor } from "./lib/consoleInterceptor";
-import { startBudgetResetJob } from "./lib/jobs/budgetResetJob";
-import { startReasoningCacheCleanupJob } from "./lib/jobs/reasoningCacheCleanupJob";
-import { startCleanupScheduler } from "./lib/db/cleanup";
 import { getSettings } from "./lib/db/settings";
 import { applyRuntimeSettings } from "./lib/config/runtimeSettings";
 import { setSystemPromptConfig } from "@omniroute/open-sse/services/systemPrompt.ts";
 import { hydrateThinkingBudgetConfig } from "@omniroute/open-sse/services/thinkingBudget.ts";
 import { startRuntimeConfigHotReload } from "./lib/config/hotReload";
+import { registerBackgroundJobs } from "./lib/background/registerBackgroundJobs";
 import { startSpendBatchWriter } from "./lib/spend/batchWriter";
 import { registerDefaultGuardrails } from "./lib/guardrails";
 import { ensurePersistentManagementPasswordHash } from "./lib/auth/managementPassword";
@@ -113,9 +111,7 @@ async function startServer() {
     }
 
     await initializeCloudSync();
-    startBudgetResetJob();
-    startReasoningCacheCleanupJob();
-    startCleanupScheduler();
+    await registerBackgroundJobs();
     startRuntimeConfigHotReload();
     startupLog.info("Server started with cloud sync initialized");
 
