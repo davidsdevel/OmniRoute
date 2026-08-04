@@ -94,12 +94,18 @@ describe("Pipeline Wiring — instrumentation-node.ts", () => {
     assert.match(src, /m\.initArenaEloSync\(\)/);
   });
 
-  it("should initialize pricing + models.dev sync on the live startup path (self-gated, opt-in)", () => {
-    // Same dead-path bug as Arena: these were only wired into the never-executed server-init.ts
-    // (models.dev had no caller at all), so their toggles were inert. They self-gate internally
-    // (PRICING_SYNC_ENABLED / settings.modelsDevSyncEnabled), so calling them here preserves opt-in.
-    assert.match(src, /initPricingSync/);
+  it("models.dev sync on the live startup path; pricing sync owned by the background registry", () => {
+    // The Next standalone runtime boots through instrumentation-node, NOT server-init.ts.
+    // models.dev sync self-gates through settings.modelsDevSyncEnabled, so calling it here
+    // preserves opt-in. Pricing sync was deliberately offloaded to the background system
+    // (local-mode localRunner tick + the pricing-sync CronJob), so its registry job must
+    // own the PRICING_SYNC_ENABLED gate instead of the web startup path.
     assert.match(src, /initModelsDevSync/);
+    assert.match(src, /registerBackgroundJobs/);
+    const pricingSyncJob = readProjectFile("src/lib/background/jobs/pricingSync.ts");
+    assert.ok(pricingSyncJob, "src/lib/background/jobs/pricingSync.ts should exist");
+    assert.match(pricingSyncJob, /syncPricingFromSources/);
+    assert.match(pricingSyncJob, /PRICING_SYNC_ENABLED/);
   });
 });
 

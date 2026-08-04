@@ -129,16 +129,6 @@ async function startServer() {
     process.exit(1);
   }
 
-  // Pricing sync: opt-in external pricing data (non-blocking, never fatal)
-  if (process.env.PRICING_SYNC_ENABLED === "true") {
-    try {
-      const { initPricingSync } = await import("./lib/pricingSync");
-      await initPricingSync();
-    } catch (err) {
-      startupLog.warn({ error: getErrorMessage(err) }, "Pricing sync could not initialize");
-    }
-  }
-
   // Arena ELO sync: model intelligence from leaderboard data (non-blocking, never fatal).
   // On by default; opt out with Dashboard Feature Flags or ARENA_ELO_SYNC_ENABLED=false.
   try {

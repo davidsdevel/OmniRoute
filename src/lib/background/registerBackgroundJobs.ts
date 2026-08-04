@@ -54,13 +54,14 @@ export async function registerBackgroundJobs(
   if (queues.enabled) {
     const scheduleTimeoutMs = options.scheduleTimeoutMs ?? SCHEDULE_TIMEOUT_MS;
     let timedOut = false;
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
+      timeoutTimer = setTimeout(() => {
         timedOut = true;
         resolve();
       }, scheduleTimeoutMs);
-      if (typeof timer === "object" && timer !== null && "unref" in timer) {
-        (timer as { unref: () => void }).unref();
+      if (typeof timeoutTimer === "object" && timeoutTimer !== null && "unref" in timeoutTimer) {
+        (timeoutTimer as { unref: () => void }).unref();
       }
     });
     try {
@@ -74,6 +75,8 @@ export async function registerBackgroundJobs(
       ]);
     } catch (error) {
       console.warn("[background] Failed to register repeatable schedulers (non-fatal):", error);
+    } finally {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
     }
     if (timedOut) {
       console.warn(
