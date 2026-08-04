@@ -71,6 +71,15 @@ describe("Pipeline Wiring — server-init.ts", () => {
     assert.match(src, /server\.start/);
   });
 
+  it("should register background jobs through the queue-or-local fallback", () => {
+    // server-init is a legacy (never-executed) path, but it must stay wired to the
+    // hybrid background system: registerBackgroundJobs() selects BullMQ queue mode
+    // when REDIS_URL is set and falls back to in-process timers otherwise, so a
+    // single-node/desktop boot never crashes on a missing Redis.
+    assert.match(src, /registerBackgroundJobs/);
+    assert.match(src, /import\s*\{[^}]*\bregisterBackgroundJobs\b/);
+  });
+
   it("should use the structured startup logger instead of direct console calls", () => {
     assert.match(src, /createLogger\("server-init"\)/);
     assert.doesNotMatch(src, /console\.(log|warn|error|info|debug)\(/);
