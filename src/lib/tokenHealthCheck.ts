@@ -180,7 +180,7 @@ function isEnvFlagEnabled(name: string): boolean {
   return TRUE_ENV_VALUES.has(value.trim().toLowerCase());
 }
 
-function isHealthCheckDisabled(): boolean {
+export function isHealthCheckDisabled(): boolean {
   return (
     isEnvFlagEnabled("OMNIROUTE_DISABLE_TOKEN_HEALTHCHECK") ||
     isBuildProcess() ||
