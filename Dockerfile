@@ -205,56 +205,18 @@ COPY --from=builder /app/open-sse ./open-sse
 COPY --from=builder /app/bin ./bin
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
-# tsx loader + esbuild platform binary. Whole @esbuild scope covers the
-# platform-specific optional package for the build arch (linux-x64/arm64).
-COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
-COPY --from=builder /app/node_modules/get-tsconfig ./node_modules/get-tsconfig
-COPY --from=builder /app/node_modules/@esbuild ./node_modules/@esbuild
+# The worker imports the RAW TypeScript sources (src/, open-sse/) at runtime via
+# tsx, so it needs the app's FULL installed dependency tree — not just
+# bullmq/ioredis/tsx. A curated top-level list proved incomplete at runtime
+# (uuid missing; zod present but its CJS entry index.cjs pruned away by the
+# standalone trace — both fatal to the require()'d aliases inside CJS-compiled
+# .ts modules). Copy the builder's complete node_modules instead: better-sqlite3
+# (native binding) and tls-client-node (native binary) were already built there.
+# tsx lives in `dependencies`, so it ships in the full tree alongside the
+# esbuild platform binary via the @esbuild/* optional scope.
+COPY --from=builder /app/node_modules ./node_modules
 
-# bullmq + ioredis + pg/redis peers + full transitive closure (installed tree,
-# verified 2026-08-04). Regenerate by walking the deps of bullmq/ioredis/tsx in
-# node_modules/ and listing every hoisted top-level package (skip optional
-# platform packages like pg-native/fsevents — handled via whole scopes above).
-COPY --from=builder /app/node_modules/@ioredis ./node_modules/@ioredis
-COPY --from=builder /app/node_modules/@msgpackr-extract ./node_modules/@msgpackr-extract
-COPY --from=builder /app/node_modules/@opentelemetry ./node_modules/@opentelemetry
-COPY --from=builder /app/node_modules/@redis ./node_modules/@redis
-COPY --from=builder /app/node_modules/bullmq ./node_modules/bullmq
-COPY --from=builder /app/node_modules/cluster-key-slot ./node_modules/cluster-key-slot
-COPY --from=builder /app/node_modules/cron-parser ./node_modules/cron-parser
-COPY --from=builder /app/node_modules/debug ./node_modules/debug
-COPY --from=builder /app/node_modules/denque ./node_modules/denque
-COPY --from=builder /app/node_modules/detect-libc ./node_modules/detect-libc
-COPY --from=builder /app/node_modules/ioredis ./node_modules/ioredis
-COPY --from=builder /app/node_modules/luxon ./node_modules/luxon
-COPY --from=builder /app/node_modules/ms ./node_modules/ms
-COPY --from=builder /app/node_modules/msgpackr ./node_modules/msgpackr
-COPY --from=builder /app/node_modules/msgpackr-extract ./node_modules/msgpackr-extract
-COPY --from=builder /app/node_modules/node-abort-controller ./node_modules/node-abort-controller
-COPY --from=builder /app/node_modules/node-gyp-build-optional-packages ./node_modules/node-gyp-build-optional-packages
-COPY --from=builder /app/node_modules/pg ./node_modules/pg
-COPY --from=builder /app/node_modules/pg-cloudflare ./node_modules/pg-cloudflare
-COPY --from=builder /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
-COPY --from=builder /app/node_modules/pg-int8 ./node_modules/pg-int8
-COPY --from=builder /app/node_modules/pg-pool ./node_modules/pg-pool
-COPY --from=builder /app/node_modules/pg-protocol ./node_modules/pg-protocol
-COPY --from=builder /app/node_modules/pg-types ./node_modules/pg-types
-COPY --from=builder /app/node_modules/pgpass ./node_modules/pgpass
-COPY --from=builder /app/node_modules/postgres-array ./node_modules/postgres-array
-COPY --from=builder /app/node_modules/postgres-bytea ./node_modules/postgres-bytea
-COPY --from=builder /app/node_modules/postgres-date ./node_modules/postgres-date
-COPY --from=builder /app/node_modules/postgres-interval ./node_modules/postgres-interval
-COPY --from=builder /app/node_modules/redis ./node_modules/redis
-COPY --from=builder /app/node_modules/redis-errors ./node_modules/redis-errors
-COPY --from=builder /app/node_modules/redis-parser ./node_modules/redis-parser
-COPY --from=builder /app/node_modules/semver ./node_modules/semver
-COPY --from=builder /app/node_modules/split2 ./node_modules/split2
-COPY --from=builder /app/node_modules/standard-as-callback ./node_modules/standard-as-callback
-COPY --from=builder /app/node_modules/tslib ./node_modules/tslib
-COPY --from=builder /app/node_modules/xtend ./node_modules/xtend
-
-CMD ["node", "--import", "tsx/esm", "bin/worker.mjs"]
+CMD ["node", "--import", "tsx", "bin/worker.mjs"]
 
 # ── Runner Web (web-cookie providers: Gemini Web, Claude Turnstile) ───────────
 #

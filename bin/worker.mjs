@@ -6,7 +6,12 @@
 //
 // Real runs need the tsx loader so tsconfig path aliases (`@/lib/...`) and the
 // extensionless relative imports inside the TypeScript source resolve:
-//   node --import tsx/esm bin/worker.mjs
+//   node --import tsx bin/worker.mjs
+// Use `tsx` (both ESM + CJS hooks), NOT `tsx/esm` (ESM hooks only). The worker
+// image's /app/package.json has no `"type": "module"`, so tsx compiles the .ts
+// sources to CommonJS; their nested `require('@/...')` calls fall through to
+// Node's plain CJS resolver, which knows nothing about tsconfig path aliases,
+// and `--import tsx/esm` does not hook that path -> MODULE_NOT_FOUND.
 // The empty-REDIS_URL guard below runs under plain Node so a misconfigured
 // deployment exits cleanly (0) without a hang.
 
